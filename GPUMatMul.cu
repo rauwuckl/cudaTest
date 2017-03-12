@@ -8,14 +8,135 @@ using namespace std::chrono;
 
 typedef std::function<void*() > func;
 
+class Matrix;
+__global__
+void cudaMatMulClass(const int* A, int an, int am, const int* B, int bn, int bm, int* out);
+
+
 class Matrix{
 private:
-   int dimX;
-   int dimY;
-   int** content;
+   int m_dimX;
+   int m_dimY;
+   int* m_content;
+
+   void deleteContent(){
+	if(m_content != NULL){
+	    cudaFree(m_content);
+	    m_content = NULL;
+	}	
+   }
+
+   class helper{
+	public:
+	int& operator[](int j){
+	    return m_M->m_content[m_i*(m_M->dimY()) +j];
+	}
+	helper(const Matrix* m, int i): m_M(m), m_i(i){}
+	private:
+	    const Matrix* m_M;
+	    int m_i;
+	};	
+
+//   class helperC{
+//	public:
+//	int operator[](int j){
+//	    return m_M->m_content[m_i*j];
+//	}
+//	helper(const Matrix* m, int i): m_M(m), m_i(i){}
+//	private:
+//	    const Matrix* m_M;
+//	    int m_i;
+//	};	
+
+public:
+   Matrix():m_dimX(-1), m_dimY(-1), m_content(NULL){}
+
+   Matrix(int dy, int dx, int val):
+	m_dimX(dx), m_dimY(dy){
+
+	    cudaMallocManaged(&m_content, m_dimX*m_dimY*sizeof(int));
+
+	    for(int i=0; i<(m_dimY*m_dimX); i++){
+		m_content[i] = val;
+	    }
+   }
+
+   Matrix(int dy, int dx):
+	m_dimX(dx), m_dimY(dy){
+	    cudaMallocManaged(&m_content, m_dimX*m_dimY*sizeof(int));
+   }
+
+   int nElem(){return m_dimX*m_dimY;}
+   int dimX() const{return m_dimX;} 
+   int dimY() const{return m_dimY;} 
+
+    Matrix& operator=(const Matrix& other){
+	if(this != &other){
+	    this->deleteContent();
+	    this->m_content = other.m_content;
+	    this->m_dimX = other.m_dimX;
+	    this->m_dimY = other.m_dimY;
+	}
+	return *this;
+    }
+
+    void print(){
+	//TODO
+	    for(int i=0; i<m_dimY; i++){
+		for(int j=0; j<m_dimX; j++){
+		    std::cout << (*this)[i][j] << ",";
+		}
+		std::cout << std::endl;
+	    }
+	    std::cout << "("<<m_dimY<<","<<m_dimX<<")"<<std::endl;
+    }
+
+    helper operator[] (const int i) const{
+	return helper(this, i);
+    }
+
+
+    Matrix matMul(const Matrix& other) const{
+      if( this->m_dimX != other.m_dimY ){
+          std::cout << "dimenstion don't fit " << std::endl;
+          throw 0;
+      }
+      int blockSize = 256;
+      int numBlocks = ((m_dimY * other.m_dimX) + blockSize - 1) / blockSize;
+
+      Matrix ret(m_dimY, other.m_dimX);
+      cudaMatMulClass<<<numBlocks,blockSize>>>(m_content, m_dimY, m_dimX, other.m_content, other.dimY(), other.dimX(), ret.m_content);
+      //cudaMatMul<<<(2,2),(3,3)>>>(A, an, am, B, bn, bm, out);
+      cudaDeviceSynchronize();
+      return ret;
+    }
+
 
 
 };
+__global__
+void cudaMatMulClass(const int* A, int an, int am, const int* B, int bn, int bm, int* out){
+    int i,j,ij, k;
+    int ijS = blockIdx.x * blockDim.x + threadIdx.x;
+    int stride = blockDim.x * gridDim.x; //how many threads ber bock * how many blocks in the grid;
+
+    //int jS = blockIdx.y * blockDim.y + threadIdx.y;
+    //int jStride = blockDim.y * gridDim.y; //how many threads ber bock * how many blocks in the grid;
+	if(blockIdx.x==0 && threadIdx.x==0){
+	printf("blockInd.x= %d ,blockDim.x= %d, threadIdx.x= %d, GridDim.x= %d\n", blockIdx.x ,blockDim.x , threadIdx.x ,gridDim.x);
+	printf("blockInd.y= %d ,blockDim.y= %d, threadIdx.y= %d, GridDim.y= %d\n", blockIdx.y ,blockDim.y , threadIdx.y ,gridDim.y);
+	printf("ijS= %d ,stride= %d \n", ijS, stride);
+}
+    for(ij=ijS; ij < an*bm; ij+=stride){
+	i = ij/bm;
+	j = ij%bm;
+	out[ij]=0;
+	for(k=0; k<am; k++){
+	    out[ij] += A[i*an + k]*B[k*bn +j];
+	}
+	//printf("(i:%d, j:%d)=%d \n", i,j, out[i][j]);
+    }
+}	
 
 __global__
 void cudaMatMul(int** A, int an, int am, int** B, int bn, int bm, int** out){
@@ -124,15 +245,9 @@ retType measureTime(func& f){
 int main(){
     std::cout << "gpu version" << std::endl;
 
-    //int A[2][2]={{1,2},{3,4}};
-    //int B[2][3]={{1,1,1},{1,1,1}};
-    //
-
-    //int** out = matMul(A, B);
-    //std::cout << "matmul stack allocated" << std::endl;
-    //print(out, 2, 3);
-
-
+    int A[2][2]={{1,2},{3,4}};
+    int B[2][3]={{1,1,1},{1,1,1}};
+    
     int **out;
     int **C = init(300, 500, 1);
     int **D = init(500, 900, 1);
@@ -141,6 +256,14 @@ int main(){
 
     out=measureTime<int**>(f);
     std::cout << "the new one " << std:: endl;
-//    print(out, 300, 900);
+    //print(out, 300, 900);
+
+
+    Matrix MA(300,500,1);
+    Matrix MB(500,900,1);
+    //func f = [A,B](){return (void*)A.matMul(B);}
+    //Matrix C = measureTime<Matrix>(f);
+    Matrix MC = MA.matMul(MB);
+    //MC.print();
     return 0;
 }
