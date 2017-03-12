@@ -8,37 +8,14 @@ using namespace std::chrono;
 
 typedef std::function<void*() > func;
 
-/**
- * multiply A (an x am ) with B (bn x bm). result will be a pointer to array of an x bm
- */
-//template <size_t an, size_t am, size_t bn, size_t bm>
-//int** matMul(int (&A)[an][am], int (&B)[bn][bm]){
-//    if( am != bn ){
-//        std::cout << "dimenstion don't fit" << std::endl;
-//        throw 0;
-//    }
-//    int i,j,k;
-//    int** out;
-//    return out;
-//    out = new int*[an];
-//    for(i=0; i < an ; i++){
-//        out[i] = new int[bm];
-//    }
-//
-//    for(i=0; i < an; i++){
-//        for(j=0; j<bm; j++){
-//            // go threw all fields in output
-//            // initialize output field as 0
-//            out[i][j]=0;
-//            
-//            for(k=0; k < am; k++){
-//                    out[i][j] += A[i][k] * B[k][j];
-//            }
-//        }
-//    }
-//    return out;
-//}
+class Matrix{
+private:
+   int dimX;
+   int dimY;
+   int** content;
 
+
+};
 
 __global__
 void cudaMatMul(int** A, int an, int am, int** B, int bn, int bm, int** out){
