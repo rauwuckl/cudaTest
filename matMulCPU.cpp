@@ -90,8 +90,8 @@ retType measureTime(func& f){
 	void* result = f();
 	std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
 
-	auto duration = std::chrono::duration_cast<microseconds>( t2 - t1 ).count();
-	std::cout << "execution took " << duration << " microseconds" << std::endl;
+	auto duration = std::chrono::duration_cast<milliseconds>( t2 - t1 ).count();
+	std::cout << "execution took " << duration << " milliseconds" << std::endl;
 	return (retType)result;
 }
 
